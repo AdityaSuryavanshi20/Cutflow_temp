@@ -1,0 +1,29 @@
+Dear {{ quote.project.customer.name }},
+
+Thank you for the opportunity. Please find attached the quotation for your project
+{{ quote.project.reference }} - {{ quote.project.name }}.
+
+Quotation No.: {{ quote.quote_no }}
+Quotation Date: {{ quote.quote_date|date:"d M Y" }}
+{% if quote.valid_until %}Valid Until: {{ quote.valid_until|date:"d M Y" }}
+{% endif %}Type: {{ quote.get_quote_type_display }}
+Grand Total: Rs. {{ quote.grand_total|floatformat:2 }}
+{% if quote.payment_terms %}
+Payment Terms: {{ quote.payment_terms }}
+{% endif %}{% if quote.notes %}
+Notes: {{ quote.notes }}
+{% endif %}
+If you have any questions about this quotation, feel free to reach out to us.
+
+Regards,
+{% if quote.salesman.get_full_name %}{{ quote.salesman.get_full_name }}
+{% endif %}{{ company_settings.company_name }}
+
+--
+{{ company_settings.company_name }}
+{% if company_settings.address_line1 %}{{ company_settings.address_line1 }}{% if company_settings.address_line2 %}, {{ company_settings.address_line2 }}{% endif %}
+{% endif %}{% if company_settings.city %}{{ company_settings.city }}{% if company_settings.state %}, {{ company_settings.state }}{% endif %} {{ company_settings.pincode }}
+{% endif %}{% if company_settings.phone %}Phone: {{ company_settings.phone }}
+{% endif %}{% if company_settings.email %}Email: {{ company_settings.email }}
+{% endif %}{% if company_settings.website %}{{ company_settings.website }}
+{% endif %}

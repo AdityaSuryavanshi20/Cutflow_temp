@@ -205,35 +205,58 @@ def quotation_pdf(request, pk):
     return response
 
 
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+from django.template.loader import render_to_string
 
 @role_required('salesman', 'admin')
 def quotation_send(request, pk):
     quote = get_object_or_404(scoped_quotations(request.user), pk=pk)
     if request.method == 'POST':
-        email = request.POST.get('email', quote.project.customer.email)
-        
+        email = (request.POST.get('email') or quote.project.customer.email or '').strip()
+
+        try:
+            validate_email(email)
+        except ValidationError:
+            messages.error(request, f'"{email}" is not a valid email address.')
+            return redirect('quotation_detail', pk=pk)
+
         try:
             # Generate PDF
             pdf_bytes = generate_quotation_pdf(quote)
-            
+
             company_settings = CompanySettings.get()
             company_name = company_settings.company_name
-            
-            # Create EmailMessage
+
+            logo_url = ''
+            if company_settings.logo:
+                try:
+                    logo_url = request.build_absolute_uri(company_settings.logo.url)
+                except Exception:
+                    logo_url = ''
+
+            context = {
+                'quote': quote,
+                'company_settings': company_settings,
+                'logo_url': logo_url,
+            }
+
             subject = f"Quotation {quote.quote_no} from {company_name}"
-            body = f"Dear {quote.project.customer.name},\n\nPlease find attached the quotation {quote.quote_no} for project {quote.project.name}.\n\nThank you,\n{company_name}"
-            
-            email_msg = EmailMessage(
+            text_body = render_to_string('quotations/email/quotation_email.txt', context)
+            html_body = render_to_string('quotations/email/quotation_email.html', context)
+
+            email_msg = EmailMultiAlternatives(
                 subject,
-                body,
+                text_body,
                 settings.DEFAULT_FROM_EMAIL,
                 [email],
             )
+            email_msg.attach_alternative(html_body, 'text/html')
             email_msg.attach(f'{quote.quote_no}.pdf', pdf_bytes, 'application/pdf')
             email_msg.send()
-            
+
             quote.status = QuotationStatus.SENT
             quote.sent_at = timezone.now()
             quote.sent_to_email = email
@@ -241,5 +264,5 @@ def quotation_send(request, pk):
             messages.success(request, f'Quotation sent successfully to {email}.')
         except Exception as e:
             messages.error(request, f'Failed to send email: {str(e)}')
-            
+
     return redirect('quotation_detail', pk=pk)

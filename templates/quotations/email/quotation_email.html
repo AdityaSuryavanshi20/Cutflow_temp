@@ -1,0 +1,128 @@
+{% load core_extras %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quotation {{ quote.quote_no }}</title>
+</head>
+<body style="margin:0; padding:0; background:#f4f6f9; font-family:'Segoe UI', Arial, sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9; padding:24px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#1E3A5F; padding:24px 32px;">
+            {% if company_settings.logo %}
+            <img src="{{ logo_url }}" alt="{{ company_settings.company_name }}" style="max-height:48px; margin-bottom:8px;">
+            {% endif %}
+            <div style="font-size:20px; font-weight:700; color:#ffffff;">{{ company_settings.company_name }}</div>
+            <div style="font-size:13px; color:#C9922A; margin-top:2px;">Quotation {{ quote.quote_no }} / Rev {{ quote.revision }}</div>
+          </td>
+        </tr>
+
+        <!-- Greeting -->
+        <tr>
+          <td style="padding:28px 32px 8px 32px;">
+            <p style="font-size:15px; color:#1E3A5F; margin:0 0 12px 0;">Dear {{ quote.project.customer.name }},</p>
+            <p style="font-size:14px; color:#3d3d3d; line-height:1.6; margin:0 0 16px 0;">
+              Thank you for the opportunity. Please find attached the quotation for your project
+              <strong>{{ quote.project.reference }} – {{ quote.project.name }}</strong>.
+              A summary is below, and the complete itemised quotation is in the attached PDF.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Summary box -->
+        <tr>
+          <td style="padding:0 32px 8px 32px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EDF2F7; border-radius:6px;">
+              <tr>
+                <td style="padding:16px 20px;">
+                  <table role="presentation" width="100%" cellpadding="4" cellspacing="0" style="font-size:14px; color:#1E3A5F;">
+                    <tr>
+                      <td style="color:#6c757d;">Quotation No.</td>
+                      <td align="right" style="font-weight:600;">{{ quote.quote_no }}</td>
+                    </tr>
+                    <tr>
+                      <td style="color:#6c757d;">Quotation Date</td>
+                      <td align="right">{{ quote.quote_date|date:"d M Y" }}</td>
+                    </tr>
+                    {% if quote.valid_until %}
+                    <tr>
+                      <td style="color:#6c757d;">Valid Until</td>
+                      <td align="right">{{ quote.valid_until|date:"d M Y" }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                      <td style="color:#6c757d;">Type</td>
+                      <td align="right">{{ quote.get_quote_type_display }}</td>
+                    </tr>
+                    <tr>
+                      <td style="color:#6c757d; border-top:1px solid #d9e0e7; padding-top:10px;">Grand Total</td>
+                      <td align="right" style="border-top:1px solid #d9e0e7; padding-top:10px; font-size:17px; font-weight:700; color:#C9922A;">
+                        ₹ {{ quote.grand_total|floatformat:2 }}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if quote.payment_terms %}
+        <tr>
+          <td style="padding:20px 32px 0 32px;">
+            <p style="font-size:13px; color:#6c757d; margin:0 0 4px 0; text-transform:uppercase; letter-spacing:.03em;">Payment Terms</p>
+            <p style="font-size:14px; color:#3d3d3d; margin:0; line-height:1.5;">{{ quote.payment_terms }}</p>
+          </td>
+        </tr>
+        {% endif %}
+
+        {% if quote.notes %}
+        <tr>
+          <td style="padding:16px 32px 0 32px;">
+            <p style="font-size:13px; color:#6c757d; margin:0 0 4px 0; text-transform:uppercase; letter-spacing:.03em;">Notes</p>
+            <p style="font-size:14px; color:#3d3d3d; margin:0; line-height:1.5;">{{ quote.notes }}</p>
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+          <td style="padding:24px 32px 28px 32px;">
+            <p style="font-size:14px; color:#3d3d3d; line-height:1.6; margin:0;">
+              If you have any questions about this quotation, feel free to reach out to us using the contact
+              details below. We look forward to working with you.
+            </p>
+            <p style="font-size:14px; color:#3d3d3d; margin:16px 0 0 0;">
+              Regards,<br>
+              {% if quote.salesman.get_full_name %}{{ quote.salesman.get_full_name }}<br>{% endif %}
+              {{ company_settings.company_name }}
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#EDF2F7; padding:20px 32px; font-size:12px; color:#6c757d; line-height:1.6;">
+            <strong style="color:#1E3A5F;">{{ company_settings.company_name }}</strong><br>
+            {% if company_settings.address_line1 %}{{ company_settings.address_line1 }}{% if company_settings.address_line2 %}, {{ company_settings.address_line2 }}{% endif %}<br>{% endif %}
+            {% if company_settings.city %}{{ company_settings.city }}{% if company_settings.state %}, {{ company_settings.state }}{% endif %} {{ company_settings.pincode }}<br>{% endif %}
+            {% if company_settings.phone %}Phone: {{ company_settings.phone }}{% endif %}
+            {% if company_settings.email %} &nbsp;|&nbsp; Email: {{ company_settings.email }}{% endif %}
+            {% if company_settings.website %} &nbsp;|&nbsp; {{ company_settings.website }}{% endif %}
+            {% if company_settings.gst_no %}<br>GSTIN: {{ company_settings.gst_no }}{% endif %}
+            <br><br>
+            <span style="color:#a0a8b0;">This is an automated email from {{ company_settings.company_name }}. Please do not reply directly if this mailbox is unmonitored.</span>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>
