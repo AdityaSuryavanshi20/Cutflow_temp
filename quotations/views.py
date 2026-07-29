@@ -13,7 +13,8 @@ import datetime
 from .models import Quotation, QuotationItem, QuotationStatus, QuotationType
 from projects.models import Project, MeasurementItem
 from catalog.models import System, Glass, Color, CompanySettings
-from .pdf_generator import generate_quotation_pdf
+from .pdf_generator import generate_quotation_pdf, draw_window_diagram
+from reportlab.graphics import renderSVG
 
 
 def _next_quote_no():
@@ -116,6 +117,28 @@ def quotation_detail(request, pk):
         'statuses': QuotationStatus.choices,
         'quote_types': QuotationType.choices,
     })
+
+
+@role_required('viewer', 'salesman', 'production', 'admin')
+def quotation_item_diagram(request, pk):
+    """Live SVG preview of a single line item's window/door diagram.
+
+    Reuses draw_window_diagram() from pdf_generator.py unchanged, so the
+    on-screen preview on the quotation page is always identical to what
+    ends up in the downloaded/emailed PDF - no separate drawing logic to
+    keep in sync.
+    """
+    item = get_object_or_404(
+        QuotationItem.objects.select_related('quotation', 'system'),
+        pk=pk,
+    )
+    # Scope through the parent quotation so this follows the same
+    # project/role visibility rules as the rest of the quotation.
+    get_object_or_404(scoped_quotations(request.user), pk=item.quotation_id)
+
+    drawing = draw_window_diagram(item)
+    svg = renderSVG.drawToString(drawing)
+    return HttpResponse(svg, content_type='image/svg+xml')
 
 
 @role_required('salesman', 'admin')

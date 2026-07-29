@@ -8,4 +8,5 @@ urlpatterns = [
     path('<int:pk>/pricing/', views.quotation_update_pricing, name='quotation_update_pricing'),
     path('<int:pk>/pdf/', views.quotation_pdf, name='quotation_pdf'),
     path('<int:pk>/send/', views.quotation_send, name='quotation_send'),
+    path('item/<int:pk>/diagram/', views.quotation_item_diagram, name='quotation_item_diagram'),
 ]

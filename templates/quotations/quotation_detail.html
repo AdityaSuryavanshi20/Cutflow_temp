@@ -64,7 +64,7 @@
     <table class="table table-hover mb-0">
       <thead>
         <tr>
-          <th>Line</th><th>Ref / Location</th><th>System</th><th>Size</th>
+          <th>Line</th><th>Preview</th><th>Ref / Location</th><th>System</th><th>Size</th>
           <th>Glass</th><th>Qty</th><th>Rate (₹)</th><th>Amount (₹)</th>
         </tr>
       </thead>
@@ -72,6 +72,11 @@
         {% for item in items %}
         <tr>
           <td><strong>{{ item.line_no }}</strong></td>
+          <td>
+            <img src="{% url 'quotation_item_diagram' item.pk %}"
+                 alt="{{ item.reference }} diagram" width="70" height="70"
+                 loading="lazy" style="background:#fff;border:1px solid #dee2e6;border-radius:4px;">
+          </td>
           <td>
             {{ item.reference }}<br><small class="text-muted">{{ item.location }}</small>
             {% if item.get_hardware_components %}
@@ -93,7 +98,7 @@
           <td class="text-end fw-bold">{{ item.total_amount|floatformat:2 }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center text-muted py-4">No items.</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-4">No items.</td></tr>
         {% endfor %}
       </tbody>
     </table>
