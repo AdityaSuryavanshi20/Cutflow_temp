@@ -1,12 +1,18 @@
 from django.contrib import admin
 from .models import (Brand, Color, System, SystemProfile, Profile, ProfileFormula,
-                     ProfileStockLength, Glass, Hardware, SystemHardwareRule, CompanySettings)
+                     ProfileStockLength, Glass, Hardware, SystemHardwareRule, CompanySettings,
+                     Topology)
 
 
 class SystemProfileInline(admin.TabularInline):
     model = SystemProfile
     extra = 1
     fields = ['profile', 'role', 'formula_group', 'sort_order', 'is_required', 'is_active']
+
+class TopologyInline(admin.TabularInline):
+    model = Topology
+    extra = 1
+    fields = ['code', 'name', 'shape', 'panel_layout', 'sort_order', 'is_active']
 
 @admin.register(Brand)
 class BrandAdmin(admin.ModelAdmin):
@@ -22,7 +28,14 @@ class SystemAdmin(admin.ModelAdmin):
     list_display = ['code', 'name', 'category', 'brand', 'is_active']
     list_filter = ['category', 'is_active', 'brand']
     search_fields = ['code', 'name']
-    inlines = [SystemProfileInline]
+    inlines = [SystemProfileInline, TopologyInline]
+
+@admin.register(Topology)
+class TopologyAdmin(admin.ModelAdmin):
+    list_display = ['system', 'code', 'name', 'shape', 'n_panels', 'is_active', 'sort_order']
+    list_filter = ['system', 'shape', 'is_active']
+    search_fields = ['code', 'name', 'system__code', 'system__name']
+
 
 class ProfileFormulaInline(admin.TabularInline):
     model = ProfileFormula

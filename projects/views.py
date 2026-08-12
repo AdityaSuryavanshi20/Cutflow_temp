@@ -1,12 +1,14 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db import transaction
 from .models import Customer, Project, MeasurementItem, ProjectStatus, ProjectStatusHistory
-from catalog.models import System, Color, Glass
+from catalog.models import System, Color, Glass, Brand, Topology
 from core.decorators import role_required
 from core.scoping import scoped_customers, scoped_projects
+from core.optimizer import CutRequest, optimize_cuts
 import json
 
 
@@ -153,13 +155,14 @@ def project_create(request):
 @role_required('viewer', 'salesman', 'production', 'admin')
 def project_detail(request, pk):
     project = get_object_or_404(scoped_projects(request.user), pk=pk)
-    measurements = project.measurements.select_related('system', 'glass', 'color').all()
+    measurements = project.measurements.select_related('system', 'glass', 'color', 'topology').all()
     return render(request, 'projects/project_detail.html', {
         'project': project,
         'measurements': measurements,
-        'systems': System.objects.filter(is_active=True),
+        'systems': System.objects.filter(is_active=True).select_related('brand'),
         'glasses': Glass.objects.filter(is_active=True),
         'colors': Color.objects.filter(is_active=True),
+        'brands': Brand.objects.filter(is_active=True).order_by('name'),
     })
 
 
@@ -173,6 +176,16 @@ def measurement_add(request, project_pk):
         system_id = request.POST.get('system')
         if not system_id or not str(system_id).isdigit() or not System.objects.filter(pk=system_id, is_active=True).exists():
             messages.error(request, 'Please select a valid system.')
+            return redirect('project_detail', pk=project_pk)
+
+        # Topology (panel configuration) is optional but, when present, must
+        # actually belong to the chosen system — otherwise a stale wizard
+        # selection (e.g. system changed after a topology was picked) could
+        # silently attach the wrong panel layout to this measurement.
+        topology_id = _parse_fk_id(request.POST.get('topology'))
+        if topology_id and not Topology.objects.filter(
+                pk=topology_id, system_id=system_id, is_active=True).exists():
+            messages.error(request, 'Selected topology does not belong to the chosen system.')
             return redirect('project_detail', pk=project_pk)
 
         errors = []
@@ -189,12 +202,13 @@ def measurement_add(request, project_pk):
         # Auto line_no
         existing = project.measurements.count()
         line_no = f"{existing + 1:04d}"
-        MeasurementItem.objects.create(
+        item = MeasurementItem.objects.create(
             project=project,
             line_no=line_no,
             reference=request.POST.get('reference', f'W{existing+1}'),
             location=request.POST.get('location', ''),
             system_id=system_id,
+            topology_id=topology_id,
             glass_id=_parse_fk_id(request.POST.get('glass')),
             color_id=_parse_fk_id(request.POST.get('color')),
             width=width,
@@ -210,6 +224,11 @@ def measurement_add(request, project_pk):
         for err in errors:
             messages.warning(request, err)
         messages.success(request, 'Measurement added.')
+        # `preview` tells the project_detail page to automatically fetch and
+        # display a bar-optimization preview for this specific item once the
+        # page reloads, matching the wizard's "add item -> run optimization"
+        # flow without requiring a full SPA rewrite of the create-item POST.
+        return redirect(f"{reverse('project_detail', kwargs={'pk': project_pk})}?preview={item.pk}")
     return redirect('project_detail', pk=project_pk)
 
 
@@ -226,6 +245,12 @@ def measurement_edit(request, pk):
             messages.error(request, 'Please select a valid system.')
             return redirect('project_detail', pk=item.project.pk)
 
+        topology_id = _parse_fk_id(request.POST.get('topology'))
+        if topology_id and not Topology.objects.filter(
+                pk=topology_id, system_id=system_id, is_active=True).exists():
+            messages.error(request, 'Selected topology does not belong to the chosen system.')
+            return redirect('project_detail', pk=item.project.pk)
+
         errors = []
         width = _parse_positive_int(request.POST.get('width'), item.width, 'Width', errors)
         height = _parse_positive_int(request.POST.get('height'), item.height, 'Height', errors)
@@ -239,6 +264,7 @@ def measurement_edit(request, pk):
         item.reference = request.POST.get('reference', item.reference)
         item.location = request.POST.get('location', item.location)
         item.system_id = system_id
+        item.topology_id = topology_id
         item.glass_id = _parse_fk_id(request.POST.get('glass'))
         item.color_id = _parse_fk_id(request.POST.get('color'))
         item.width = width
@@ -301,3 +327,107 @@ def project_unlock(request, pk):
         project.unlock(request.user)
         messages.success(request, 'Project unlocked.')
     return redirect('project_detail', pk=pk)
+
+
+@role_required('viewer', 'salesman', 'production', 'admin')
+def measurement_optimize_preview(request, pk):
+    """
+    Lightweight, read-only bar-optimization preview for a single measurement
+    item. Evaluates that item's cut list from its system's profile formulas
+    and runs the same bar-packing optimizer used for full production jobs,
+    without creating any ProductionJob/ProductionItem records. This backs
+    the "run bar optimization for this window/door" step at the end of the
+    New Item wizard, so a salesman gets instant feedback on material
+    efficiency before committing to a full production job.
+    """
+    item = get_object_or_404(
+        MeasurementItem.objects.select_related('system', 'topology', 'project'),
+        pk=pk, project__in=scoped_projects(request.user))
+
+    # Imported locally to avoid a hard project<->production app coupling at
+    # module load time (production.services also imports from catalog/core).
+    from catalog.models import CompanySettings
+    from production.services import compute_cuts_for_item
+
+    settings_obj = CompanySettings.get()
+
+    try:
+        cut_list, diagnostics = compute_cuts_for_item(item)
+    except ValueError as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)})
+
+    if not cut_list:
+        return JsonResponse({
+            'ok': True,
+            'reference': item.reference,
+            'line_no': item.line_no,
+            'has_cuts': False,
+            'diagnostics': diagnostics,
+            'bars': [],
+            'totals': {},
+        })
+
+    cut_requests = []
+    profiles_by_id = {}
+    for cut in cut_list:
+        profile = cut['profile']
+        profiles_by_id[profile.pk] = profile
+        cut_requests.append(CutRequest(
+            profile_id=profile.pk,
+            profile_stock_no=profile.stock_no,
+            profile_name=profile.name,
+            length=cut['cut_length_mm'],
+            left_angle=cut['left_angle'],
+            right_angle=cut['right_angle'],
+            position_code=cut['position_code'],
+            source_ref=f"{item.project.reference}/{item.line_no}",
+            qty=cut['quantity'],
+        ))
+
+    bar_length_by_profile = {
+        profile_id: profile.available_stock_lengths()
+        for profile_id, profile in profiles_by_id.items()
+    }
+
+    try:
+        results = optimize_cuts(
+            cut_requests,
+            bar_length=bar_length_by_profile,
+            kerf=settings_obj.kerf_mm,
+            end_waste=settings_obj.end_waste_mm,
+            min_reusable=settings_obj.min_reusable_offcut_mm,
+        )
+    except ValueError as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)})
+
+    bars_summary = []
+    total_bars = 0
+    total_utilisation_weighted = 0.0
+    for profile_id, opt_result in results.items():
+        profile = profiles_by_id.get(profile_id)
+        n_bars = len(opt_result.bars)
+        total_bars += n_bars
+        avg_util = round(sum(b.utilisation_pct for b in opt_result.bars) / n_bars, 1) if n_bars else 0.0
+        total_utilisation_weighted += avg_util * n_bars
+        bars_summary.append({
+            'profile_stock_no': profile.stock_no if profile else str(profile_id),
+            'profile_name': profile.name if profile else '',
+            'bar_count': n_bars,
+            'avg_utilisation_pct': avg_util,
+        })
+
+    overall_util = round(total_utilisation_weighted / total_bars, 1) if total_bars else 0.0
+
+    return JsonResponse({
+        'ok': True,
+        'reference': item.reference,
+        'line_no': item.line_no,
+        'has_cuts': True,
+        'diagnostics': diagnostics,
+        'bars': bars_summary,
+        'totals': {
+            'total_bars': total_bars,
+            'overall_utilisation_pct': overall_util,
+            'cut_pieces': sum(c.qty for c in cut_requests),
+        },
+    })

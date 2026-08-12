@@ -69,6 +69,56 @@ class System(models.Model):
         return float(self.markup_percent)
 
 
+class TopologyPanelType(models.TextChoices):
+    """How a single panel within a topology behaves."""
+    FIXED = 'fixed', 'Fixed'
+    SLIDING = 'sliding', 'Sliding'
+    OPENABLE_L = 'openable_l', 'Openable (Hinge Left)'
+    OPENABLE_R = 'openable_r', 'Openable (Hinge Right)'
+    TOP_HUNG = 'top_hung', 'Top Hung'
+    LOUVER = 'louver', 'Louver'
+
+
+class TopologyShape(models.TextChoices):
+    """Overall outline of the opening, drawn around the panel layout."""
+    RECTANGLE = 'rectangle', 'Rectangle'
+    SEMI_CIRCLE_TOP = 'semi_circle_top', 'Semicircle Top'
+    ARCH_TOP = 'arch_top', 'Arched Top'
+
+
+class Topology(models.Model):
+    """
+    A specific panel arrangement ("configuration") available for a System —
+    e.g. for a 2-Track Sliding system: '2 Sliding', '1 Fixed + 1 Sliding',
+    or '2 Track with Semicircle Top'. Selecting a Topology is the step that
+    happens right after choosing Series (Brand) + System, and before the
+    user fills in dimensions/other details for a specific window/door.
+    """
+    system = models.ForeignKey(System, on_delete=models.CASCADE, related_name='topologies')
+    code = models.CharField(max_length=20, help_text='Short code, unique within the system, e.g. 2S, 1F1S')
+    name = models.CharField(max_length=150, help_text="e.g. '2 Sliding', '1 Fixed + 1 Openable'")
+    shape = models.CharField(max_length=20, choices=TopologyShape.choices,
+                              default=TopologyShape.RECTANGLE)
+    panel_layout = models.JSONField(
+        default=list,
+        help_text='Ordered list of panel type tokens, e.g. ["sliding", "sliding"]. '
+                   'Drives both the preview thumbnail and the default panel count.')
+    description = models.CharField(max_length=255, blank=True)
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['system', 'sort_order', 'code']
+        unique_together = [('system', 'code')]
+
+    def __str__(self):
+        return f"{self.system.code} / {self.code} – {self.name}"
+
+    @property
+    def n_panels(self):
+        return len(self.panel_layout) or 1
+
+
 class SystemProfileRole(models.TextChoices):
     OUTER_FRAME_TOP = 'outer_frame_top', 'Outer Frame Top'
     OUTER_FRAME_BOTTOM = 'outer_frame_bottom', 'Outer Frame Bottom'

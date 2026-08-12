@@ -119,6 +119,9 @@ class MeasurementItem(models.Model):
     location = models.CharField(max_length=100, help_text='e.g. Living Room')
     system = models.ForeignKey('catalog.System', on_delete=models.PROTECT,
                                related_name='measurement_items')
+    topology = models.ForeignKey('catalog.Topology', on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='measurement_items',
+                                 help_text='Panel configuration selected for this opening')
     color = models.ForeignKey('catalog.Color', on_delete=models.SET_NULL, null=True, blank=True)
     glass = models.ForeignKey('catalog.Glass', on_delete=models.SET_NULL, null=True, blank=True)
     width = models.IntegerField(help_text='mm')

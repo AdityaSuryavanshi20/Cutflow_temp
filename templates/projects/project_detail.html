@@ -103,6 +103,10 @@
                     data-reference="{{ m.reference }}"
                     data-location="{{ m.location }}"
                     data-system="{{ m.system_id|default:'' }}"
+                    data-system-name="{{ m.system.name|default:'' }}"
+                    data-brand="{{ m.system.brand_id|default:'' }}"
+                    data-topology="{{ m.topology_id|default:'' }}"
+                    data-topology-name="{{ m.topology.name|default:'' }}"
                     data-width="{{ m.width }}"
                     data-height="{{ m.height }}"
                     data-qty="{{ m.qty }}"
@@ -154,6 +158,10 @@
               <span class="fw-medium text-end text-truncate ms-2" style="max-width: 60%;" title="{{ m.system.name }}">{{ m.system.name }}</span>
             </li>
             <li class="list-group-item d-flex justify-content-between px-3 py-2">
+              <span class="text-muted"><i class="fa fa-shapes me-2 text-primary"></i>Topology</span>
+              <span class="fw-medium text-end text-truncate ms-2" style="max-width: 60%;" title="{{ m.topology.name|default:'—' }}">{{ m.topology.name|default:'—' }}</span>
+            </li>
+            <li class="list-group-item d-flex justify-content-between px-3 py-2">
               <span class="text-muted"><i class="fa fa-cube me-2 text-primary"></i>Material</span>
               <span class="fw-medium text-end">
                 <span class="badge {% if m.system.material == 'aluminium' %}bg-secondary{% else %}bg-info text-dark{% endif %}">
@@ -186,6 +194,11 @@
               </span>
             </li>
           </ul>
+          <div class="border-top p-2 bg-white">
+            <button type="button" class="btn btn-sm btn-outline-primary w-100 run-opt-preview-btn" data-pk="{{ m.pk }}">
+              <i class="fa fa-cut me-1"></i> Preview Bar Optimization
+            </button>
+          </div>
         </div>
       </div>
       {% empty %}
@@ -229,98 +242,186 @@
 </div>
 {% endif %}
 
-<!-- Add Measurement Modal -->
+<!-- Add/Edit Measurement Wizard Modal (Series -> System -> Topology -> Details) -->
 <div class="modal fade" id="addMeasModal" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header" style="background:var(--cf-dark);color:#fff;">
-        <h5 class="modal-title" id="measModalTitle">Add Measurement</h5>
+        <h5 class="modal-title" id="measModalTitle">Add Item</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
       <form method="post" id="measForm" action="{% url 'measurement_add' project.pk %}">
         {% csrf_token %}
         <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-md-3">
-              <label class="form-label">Reference <span class="text-danger">*</span></label>
-              <input type="text" name="reference" id="meas-reference" class="form-control" placeholder="W1, D1..." required>
-            </div>
-            <div class="col-md-5">
-              <label class="form-label">Location <span class="text-danger">*</span></label>
-              <input type="text" name="location" id="meas-location" class="form-control" placeholder="Living Room, Kitchen..." required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">System <span class="text-danger">*</span></label>
-              <select name="system" id="meas-system" class="form-select" required>
-                {% for s in systems %}<option value="{{ s.pk }}">{{ s.name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Width (mm) <span class="text-danger">*</span></label>
-              <input type="number" name="width" id="meas-width" class="form-control" required min="100">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label">Height (mm) <span class="text-danger">*</span></label>
-              <input type="number" name="height" id="meas-height" class="form-control" required min="100">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label">Qty</label>
-              <input type="number" name="qty" id="meas-qty" class="form-control" value="1" min="1">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label">Panels</label>
-              <input type="number" name="n_panels" id="meas-n-panels" class="form-control" value="1" min="1">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label">Hinge Side</label>
-              <select name="hinge_side" id="meas-hinge-side" class="form-select">
-                <option value="">N/A</option>
-                <option value="L">Left</option>
-                <option value="R">Right</option>
-              </select>
-            </div>
-            <div class="col-md-5">
-              <label class="form-label">Glass</label>
-              <select name="glass" id="meas-glass" class="form-select">
-                <option value="">— Select Glass —</option>
-                {% for g in glasses %}<option value="{{ g.pk }}">{{ g.name }} ({{ g.thickness }})</option>{% endfor %}
-              </select>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Color</label>
-              <select name="color" id="meas-color" class="form-select">
-                <option value="">— Select Color —</option>
-                {% for c in colors %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
-              </select>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Description</label>
-              <input type="text" name="description" id="meas-description" class="form-control" placeholder="e.g. Casement FO/L.R, Bay 3 Facet">
-            </div>
-            <div class="col-12">
-              <label class="form-label">Notes</label>
-              <textarea name="notes" id="meas-notes" class="form-control" rows="2"></textarea>
-            </div>
-            <div class="col-12">
-              <div class="form-check">
-                <input type="checkbox" name="dimensions_confirmed" id="meas-dimensions-confirmed" class="form-check-input" value="1">
-                <label class="form-check-label" for="meas-dimensions-confirmed">Dimensions confirmed</label>
+
+          <!-- Step indicator -->
+          <div class="d-flex align-items-center gap-2 mb-3 small text-muted" id="wizSteps">
+            <span class="wiz-step-pill active" data-step="1">1. Series &amp; System</span>
+            <i class="fa fa-chevron-right"></i>
+            <span class="wiz-step-pill" data-step="2">2. Topology</span>
+            <i class="fa fa-chevron-right"></i>
+            <span class="wiz-step-pill" data-step="3">3. Details</span>
+          </div>
+
+          <!-- Hidden fields carrying the wizard's actual selections into the POST -->
+          <input type="hidden" name="system" id="meas-system">
+          <input type="hidden" name="topology" id="meas-topology">
+
+          <!-- ===== Step 1+2 combined panel: Series/System on the left, Topologies on the right (EVA-style) ===== -->
+          <div id="wizStepConfig">
+            <div class="row g-0 border rounded-3 overflow-hidden">
+              <div class="col-md-3 bg-light border-end p-3">
+                <label class="form-label fw-semibold small text-uppercase text-muted">Series</label>
+                <select id="wiz-brand" class="form-select mb-3">
+                  <option value="">All Series</option>
+                  {% for b in brands %}<option value="{{ b.pk }}">{{ b.name }}</option>{% endfor %}
+                </select>
+                <label class="form-label fw-semibold small text-uppercase text-muted">System</label>
+                <select id="wiz-system" class="form-select">
+                  <option value="">— Select System —</option>
+                </select>
+                <div class="small text-muted mt-2" id="wiz-system-hint"></div>
               </div>
-              <div class="form-check">
-                <input type="checkbox" name="flyscreen" id="meas-flyscreen" class="form-check-input" value="1">
-                <label class="form-check-label" for="meas-flyscreen">Mesh / Flyscreen required</label>
+              <div class="col-md-9 p-3" style="min-height:360px; max-height:420px; overflow-y:auto;">
+                <label class="form-label fw-semibold small text-uppercase text-muted mb-2">Topologies</label>
+                <div class="row row-cols-2 row-cols-lg-3 g-3" id="wiz-topology-grid">
+                  <div class="col-12 text-center text-muted py-5" id="wiz-topology-placeholder">
+                    <i class="fa fa-arrow-left me-1"></i> Select a series and system to see the available panel configurations.
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- ===== Step 3: customize / add info ===== -->
+          <div id="wizStepDetails" class="d-none">
+            <div class="d-flex justify-content-between align-items-center bg-light border rounded-3 px-3 py-2 mb-3">
+              <div class="small">
+                <i class="fa fa-layer-group text-primary me-1"></i>
+                <span id="wiz-config-summary" class="fw-semibold">—</span>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="wiz-change-config-btn">
+                <i class="fa fa-arrow-left me-1"></i> Change System / Topology
+              </button>
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div id="wiz-preview" class="d-flex justify-content-center align-items-center border rounded-3 bg-light" style="height:160px;"></div>
+              </div>
+              <div class="col-md-8">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <label class="form-label">Reference <span class="text-danger">*</span></label>
+                    <input type="text" name="reference" id="meas-reference" class="form-control" placeholder="W1, D1..." required>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">Location <span class="text-danger">*</span></label>
+                    <input type="text" name="location" id="meas-location" class="form-control" placeholder="Living Room, Kitchen..." required>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Width (mm) <span class="text-danger">*</span></label>
+                    <input type="number" name="width" id="meas-width" class="form-control" required min="100">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Height (mm) <span class="text-danger">*</span></label>
+                    <input type="number" name="height" id="meas-height" class="form-control" required min="100">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Qty</label>
+                    <input type="number" name="qty" id="meas-qty" class="form-control" value="1" min="1">
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Panels</label>
+                    <input type="number" name="n_panels" id="meas-n-panels" class="form-control" value="1" min="1">
+                    <div class="form-text">Pre-filled from the selected topology; adjust if needed.</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label">Hinge Side</label>
+                    <select name="hinge_side" id="meas-hinge-side" class="form-select">
+                      <option value="">N/A</option>
+                      <option value="L">Left</option>
+                      <option value="R">Right</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Glass</label>
+                <select name="glass" id="meas-glass" class="form-select">
+                  <option value="">— Select Glass —</option>
+                  {% for g in glasses %}<option value="{{ g.pk }}">{{ g.name }} ({{ g.thickness }})</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Color</label>
+                <select name="color" id="meas-color" class="form-select">
+                  <option value="">— Select Color —</option>
+                  {% for c in colors %}<option value="{{ c.pk }}">{{ c.name }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Description</label>
+                <input type="text" name="description" id="meas-description" class="form-control" placeholder="e.g. Casement FO/L.R, Bay 3 Facet">
+              </div>
+              <div class="col-12">
+                <label class="form-label">Notes</label>
+                <textarea name="notes" id="meas-notes" class="form-control" rows="2"></textarea>
+              </div>
+              <div class="col-12">
+                <div class="form-check">
+                  <input type="checkbox" name="dimensions_confirmed" id="meas-dimensions-confirmed" class="form-check-input" value="1">
+                  <label class="form-check-label" for="meas-dimensions-confirmed">Dimensions confirmed</label>
+                </div>
+                <div class="form-check">
+                  <input type="checkbox" name="flyscreen" id="meas-flyscreen" class="form-check-input" value="1">
+                  <label class="form-check-label" for="meas-flyscreen">Mesh / Flyscreen required</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="measSubmitBtn">Add Measurement</button>
+          <button type="button" class="btn btn-primary" id="wizNextBtn" disabled>Next <i class="fa fa-arrow-right ms-1"></i></button>
+          <button type="submit" class="btn btn-primary d-none" id="measSubmitBtn">Add Measurement</button>
         </div>
       </form>
     </div>
   </div>
 </div>
+
+<!-- Bar Optimization Preview Modal (auto-opened right after an item is added) -->
+<div class="modal fade" id="optPreviewModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--cf-dark);color:#fff;">
+        <h5 class="modal-title"><i class="fa fa-cut me-2"></i>Bar Optimization Preview</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="optPreviewBody">
+        <div class="text-center text-muted py-4">
+          <i class="fa fa-spinner fa-spin fa-2x mb-2"></i>
+          <p class="mb-0">Running bar optimization…</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.wiz-step-pill { padding: .15rem .6rem; border-radius: 20px; }
+.wiz-step-pill.active { background: var(--cf-mid); color: #fff; font-weight: 600; }
+.topology-card { cursor: pointer; border: 2px solid #dee2e6; border-radius: 10px; padding: .6rem; text-align: center; background: #fff; transition: all .15s; height: 100%; }
+.topology-card:hover { border-color: var(--cf-mid); }
+.topology-card.selected { border-color: var(--cf-gold); background: #fff8ec; box-shadow: 0 0 0 2px rgba(201,146,42,.25); }
+.topology-card .topo-thumb { height: 80px; display: flex; align-items: center; justify-content: center; margin-bottom: .4rem; }
+.topology-card .topo-name { font-size: .8rem; font-weight: 600; }
+</style>
 
 <!-- Lock Modal -->
 <div class="modal fade" id="lockModal" tabindex="-1">
@@ -345,6 +446,7 @@
     </div>
   </div>
 </div>
+
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -490,17 +592,283 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = svgContent;
     });
 
-    // --- Measurement Add/Edit modal wiring ---
+    // ============================================================
+    // New Item Wizard: Series -> System -> Topology -> Details
+    // ============================================================
     const measForm = document.getElementById('measForm');
     const measModalTitle = document.getElementById('measModalTitle');
     const measSubmitBtn = document.getElementById('measSubmitBtn');
+    const wizNextBtn = document.getElementById('wizNextBtn');
+    const wizStepConfig = document.getElementById('wizStepConfig');
+    const wizStepDetails = document.getElementById('wizStepDetails');
+    const wizBrandSel = document.getElementById('wiz-brand');
+    const wizSystemSel = document.getElementById('wiz-system');
+    const wizSystemHint = document.getElementById('wiz-system-hint');
+    const wizTopoGrid = document.getElementById('wiz-topology-grid');
+    const wizConfigSummary = document.getElementById('wiz-config-summary');
+    const wizPreview = document.getElementById('wiz-preview');
+    const wizChangeBtn = document.getElementById('wiz-change-config-btn');
+    const wizSteps = document.querySelectorAll('#wizSteps .wiz-step-pill');
     const addMeasUrl = "{% url 'measurement_add' project.pk %}";
+    const apiSystemsUrl = "{% url 'api_systems_by_series' %}";
+    const apiTopologiesUrl = "{% url 'api_topologies_by_system' %}";
+
+    let wizSelectedSystem = null;   // {id, name, category, material}
+    let wizSelectedTopology = null; // {id, name, panel_layout, shape} | null (custom / no preset)
+    let wizTopologiesCache = [];
+
+    // --- Reusable SVG renderer for a topology preview (thumbnails + live preview) ---
+    function renderTopologySVG(panelLayout, shape, opts) {
+        opts = opts || {};
+        const aspect = opts.aspectRatio || 1;
+        const maxSize = opts.maxSize || 130;
+        const colorHex = opts.colorHex || '#8B5A2B';
+        const uid = 't' + Math.random().toString(36).slice(2, 9);
+        let svgW, svgH;
+        if (aspect > 1) { svgW = maxSize; svgH = maxSize / aspect; }
+        else { svgH = maxSize; svgW = maxSize * aspect; }
+        const frameT = Math.max(svgW, svgH) * 0.08;
+        const hasArch = (shape === 'semi_circle_top' || shape === 'arch_top');
+        const archH = shape === 'semi_circle_top' ? svgH * 0.30 : (shape === 'arch_top' ? svgH * 0.16 : 0);
+        const bodyTop = archH;
+
+        let s = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;max-height:100%;">`;
+        s += `<defs>
+            <marker id="arrow-${uid}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#555"/></marker>
+            <marker id="arrowstart-${uid}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M10 0L0 5L10 10z" fill="#555"/></marker>
+        </defs>`;
+
+        if (hasArch) {
+            const r = svgW / 2;
+            s += `<path d="M0,${svgH} L0,${bodyTop} A${r},${archH} 0 0 1 ${svgW},${bodyTop} L${svgW},${svgH} Z" fill="${colorHex}" stroke="#333" stroke-width="1"/>`;
+            const rInner = Math.max(r - frameT, 2);
+            const archHInner = Math.max(archH - frameT * 0.6, 2);
+            s += `<path d="M${frameT},${bodyTop + frameT * 0.5} A${rInner},${archHInner} 0 0 1 ${svgW - frameT},${bodyTop + frameT * 0.5}" fill="none" stroke="#333" stroke-width="0.5"/>`;
+            s += `<path d="M${frameT},${bodyTop + frameT * 0.5} A${rInner},${archHInner} 0 0 1 ${svgW - frameT},${bodyTop + frameT * 0.5} L${svgW - frameT},${bodyTop + frameT} A${rInner * 0.9},${archHInner * 0.7} 0 0 0 ${frameT},${bodyTop + frameT} Z" fill="#e9ecef" opacity="0.9"/>`;
+        } else {
+            s += `<rect x="0" y="0" width="${svgW}" height="${svgH}" fill="${colorHex}" stroke="#333" stroke-width="1" rx="2"/>`;
+        }
+
+        const innerX = frameT;
+        const innerY = bodyTop + (hasArch ? frameT * 1.1 : frameT);
+        const innerW = svgW - 2 * frameT;
+        const innerH = svgH - innerY - frameT;
+        if (innerW > 0 && innerH > 0) {
+            s += `<rect x="${innerX}" y="${innerY}" width="${innerW}" height="${innerH}" fill="#e9ecef" stroke="#333" stroke-width="1"/>`;
+
+            const layout = (panelLayout && panelLayout.length) ? panelLayout : ['fixed'];
+            const n = layout.length;
+            const panelW = innerW / n;
+            layout.forEach((type, i) => {
+                const px = innerX + i * panelW;
+                const py = innerY;
+                const sashT = Math.max(frameT * 0.7, 2);
+                s += `<rect x="${px}" y="${py}" width="${panelW}" height="${innerH}" fill="none" stroke="${colorHex}" stroke-width="${sashT}"/>`;
+                const gx = px + sashT / 2, gy = py + sashT / 2, gw = Math.max(panelW - sashT, 1), gh = Math.max(innerH - sashT, 1);
+                s += `<polygon points="${gx + gw * 0.15},${gy + gh * 0.85} ${gx + gw * 0.75},${gy + gh * 0.15} ${gx + gw * 0.88},${gy + gh * 0.15} ${gx + gw * 0.28},${gy + gh * 0.85}" fill="rgba(255,255,255,0.55)"/>`;
+
+                if (type === 'sliding') {
+                    const cy = py + innerH / 2;
+                    const al = Math.min(panelW * 0.5, 22);
+                    s += `<line x1="${px + panelW / 2 - al / 2}" y1="${cy}" x2="${px + panelW / 2 + al / 2}" y2="${cy}" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-${uid})" marker-start="url(#arrowstart-${uid})"/>`;
+                } else if (type === 'openable_l' || type === 'openable_r') {
+                    const hingeLeft = type === 'openable_l';
+                    const hx1 = hingeLeft ? px + panelW : px;
+                    const hx2 = hingeLeft ? px : px + panelW;
+                    s += `<polyline points="${hx1},${py} ${hx2},${py + innerH / 2} ${hx1},${py + innerH}" fill="none" stroke="#555" stroke-width="1.5" stroke-dasharray="2,2"/>`;
+                } else if (type === 'top_hung') {
+                    s += `<polyline points="${px},${py + innerH} ${px + panelW / 2},${py} ${px + panelW},${py + innerH}" fill="none" stroke="#555" stroke-width="1.5" stroke-dasharray="2,2"/>`;
+                } else if (type === 'louver') {
+                    const slats = 6;
+                    for (let k = 1; k < slats; k++) {
+                        const ly = gy + gh * k / slats;
+                        s += `<line x1="${gx}" y1="${ly}" x2="${gx + gw}" y2="${ly}" stroke="${colorHex}" stroke-width="1.5" opacity="0.85"/>`;
+                    }
+                }
+            });
+        }
+        s += `</svg>`;
+        return s;
+    }
+
+    function setWizStep(step) {
+        wizSteps.forEach(function(p) {
+            p.classList.toggle('active', parseInt(p.dataset.step) <= step);
+        });
+        if (step < 3) {
+            wizStepConfig.classList.remove('d-none');
+            wizStepDetails.classList.add('d-none');
+            wizNextBtn.classList.remove('d-none');
+            measSubmitBtn.classList.add('d-none');
+        } else {
+            wizStepConfig.classList.add('d-none');
+            wizStepDetails.classList.remove('d-none');
+            wizNextBtn.classList.add('d-none');
+            measSubmitBtn.classList.remove('d-none');
+        }
+    }
+
+    function clearTopologyGrid(message) {
+        wizTopoGrid.innerHTML = `<div class="col-12 text-center text-muted py-5">
+            <i class="fa fa-arrow-left me-1"></i> ${message}
+        </div>`;
+    }
+
+    function selectTopologyCard(cardEl, topo) {
+        wizTopoGrid.querySelectorAll('.topology-card').forEach(c => c.classList.remove('selected'));
+        if (cardEl) cardEl.classList.add('selected');
+        wizSelectedTopology = topo;
+        wizNextBtn.disabled = !wizSelectedSystem;
+    }
+
+    function loadSystems(brandId, preselectSystemId, preselectTopologyId) {
+        wizSystemSel.innerHTML = '<option value="">— Select System —</option>';
+        clearTopologyGrid('Select a series and system to see the available panel configurations.');
+        wizSelectedSystem = null;
+        wizSelectedTopology = null;
+        wizNextBtn.disabled = true;
+        wizSystemHint.textContent = 'Loading systems…';
+        fetch(apiSystemsUrl + (brandId ? ('?brand=' + encodeURIComponent(brandId)) : ''))
+            .then(r => {
+                if (!r.ok) { throw new Error('HTTP ' + r.status + ' from ' + r.url); }
+                return r.json();
+            })
+            .then(data => {
+                (data.systems || []).forEach(sys => {
+                    const opt = document.createElement('option');
+                    opt.value = sys.id;
+                    opt.textContent = sys.name + ' (' + sys.category_label + ')';
+                    opt.dataset.category = sys.category;
+                    opt.dataset.material = sys.material;
+                    wizSystemSel.appendChild(opt);
+                });
+                wizSystemHint.textContent = (data.systems || []).length + ' system(s) available';
+                if (!(data.systems || []).length) {
+                    wizSystemHint.textContent = 'No active systems found' + (brandId ? ' for this series.' : '.');
+                }
+                if (preselectSystemId) {
+                    wizSystemSel.value = preselectSystemId;
+                    if (wizSystemSel.value) {
+                        onSystemChosen(preselectTopologyId);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load systems:', err);
+                wizSystemHint.innerHTML = '<span class="text-danger">Could not load systems (' + err.message + '). Check the browser console / that you are logged in.</span>';
+            });
+    }
+
+    function onSystemChosen(preselectTopologyId) {
+        const opt = wizSystemSel.options[wizSystemSel.selectedIndex];
+        if (!wizSystemSel.value) {
+            wizSelectedSystem = null;
+            wizNextBtn.disabled = true;
+            clearTopologyGrid('Select a series and system to see the available panel configurations.');
+            return;
+        }
+        wizSelectedSystem = {
+            id: wizSystemSel.value,
+            name: opt.textContent,
+            category: opt.dataset.category,
+            material: opt.dataset.material,
+        };
+        loadTopologiesThenPreselect(wizSystemSel.value, preselectTopologyId);
+    }
+
+    function loadTopologiesThenPreselect(systemId, preselectTopologyId) {
+        clearTopologyGrid('Loading configurations…');
+        fetch(apiTopologiesUrl + '?system=' + encodeURIComponent(systemId))
+            .then(r => {
+                if (!r.ok) { throw new Error('HTTP ' + r.status + ' from ' + r.url); }
+                return r.json();
+            })
+            .then(data => {
+                wizTopologiesCache = data.topologies || [];
+                wizTopoGrid.innerHTML = '';
+                let toSelectCard = null, toSelectTopo = null;
+
+                wizTopologiesCache.forEach(topo => {
+                    const col = document.createElement('div');
+                    col.className = 'col';
+                    const card = document.createElement('div');
+                    card.className = 'topology-card';
+                    card.innerHTML = `
+                        <div class="topo-thumb">${renderTopologySVG(topo.panel_layout, topo.shape, {maxSize: 78})}</div>
+                        <div class="topo-name">${topo.name}</div>
+                        <div class="text-muted" style="font-size:.7rem;">${topo.n_panels} panel${topo.n_panels > 1 ? 's' : ''}</div>`;
+                    card.addEventListener('click', function() { selectTopologyCard(card, topo); });
+                    col.appendChild(card);
+                    wizTopoGrid.appendChild(col);
+                    if (preselectTopologyId && String(topo.id) === String(preselectTopologyId)) {
+                        toSelectCard = card; toSelectTopo = topo;
+                    }
+                });
+
+                const col = document.createElement('div');
+                col.className = 'col';
+                const customCard = document.createElement('div');
+                customCard.className = 'topology-card';
+                customCard.innerHTML = `
+                    <div class="topo-thumb">${renderTopologySVG(['fixed'], 'rectangle', {maxSize: 78, colorHex: '#adb5bd'})}</div>
+                    <div class="topo-name">Custom (no preset)</div>
+                    <div class="text-muted" style="font-size:.7rem;">Set panels manually</div>`;
+                customCard.addEventListener('click', function() { selectTopologyCard(customCard, null); });
+                col.appendChild(customCard);
+                wizTopoGrid.appendChild(col);
+
+                if (toSelectCard) {
+                    selectTopologyCard(toSelectCard, toSelectTopo);
+                } else if (preselectTopologyId === '') {
+                    selectTopologyCard(customCard, null);
+                } else {
+                    wizNextBtn.disabled = false; // system chosen, topology optional to proceed
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load topologies:', err);
+                clearTopologyGrid('Could not load topologies (' + err.message + '). Check the browser console.');
+                wizNextBtn.disabled = false; // still let them proceed without a topology
+            });
+    }
+
+    wizBrandSel.addEventListener('change', function() { loadSystems(wizBrandSel.value); });
+    wizSystemSel.addEventListener('change', function() { onSystemChosen(); });
+
+    wizNextBtn.addEventListener('click', function() {
+        if (!wizSelectedSystem) return;
+        document.getElementById('meas-system').value = wizSelectedSystem.id;
+        document.getElementById('meas-topology').value = wizSelectedTopology ? wizSelectedTopology.id : '';
+        document.getElementById('meas-n-panels').value = wizSelectedTopology ? wizSelectedTopology.n_panels : 1;
+        wizConfigSummary.textContent = wizSelectedSystem.name + (wizSelectedTopology ? (' — ' + wizSelectedTopology.name) : ' — Custom');
+        renderWizPreview();
+        setWizStep(3);
+    });
+
+    wizChangeBtn.addEventListener('click', function() { setWizStep(1); });
+
+    function renderWizPreview() {
+        const w = parseFloat(document.getElementById('meas-width').value) || 1000;
+        const h = parseFloat(document.getElementById('meas-height').value) || 1200;
+        const layout = wizSelectedTopology ? wizSelectedTopology.panel_layout : ['fixed'];
+        const shape = wizSelectedTopology ? wizSelectedTopology.shape : 'rectangle';
+        wizPreview.innerHTML = renderTopologySVG(layout, shape, {aspectRatio: w / h, maxSize: 140});
+    }
+    document.getElementById('meas-width').addEventListener('input', renderWizPreview);
+    document.getElementById('meas-height').addEventListener('input', renderWizPreview);
 
     function resetMeasFormToAddMode() {
         measForm.action = addMeasUrl;
-        measModalTitle.textContent = 'Add Measurement';
+        measModalTitle.textContent = 'Add Item';
         measSubmitBtn.textContent = 'Add Measurement';
         measForm.reset();
+        document.getElementById('meas-system').value = '';
+        document.getElementById('meas-topology').value = '';
+        wizBrandSel.value = '';
+        wizSelectedSystem = null;
+        wizSelectedTopology = null;
+        loadSystems('');
+        setWizStep(1);
     }
 
     document.querySelectorAll('.add-meas-trigger-btn').forEach(function(btn) {
@@ -511,7 +879,6 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             const d = btn.dataset;
 
-            // Build the edit URL by substituting the pk into the URL pattern.
             measForm.action = "{% url 'measurement_edit' 0 %}".replace('/0/', '/' + d.pk + '/');
             measModalTitle.textContent = 'Edit Measurement';
             measSubmitBtn.textContent = 'Save Changes';
@@ -519,6 +886,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('meas-reference').value = d.reference || '';
             document.getElementById('meas-location').value = d.location || '';
             document.getElementById('meas-system').value = d.system || '';
+            document.getElementById('meas-topology').value = d.topology || '';
             document.getElementById('meas-width').value = d.width || '';
             document.getElementById('meas-height').value = d.height || '';
             document.getElementById('meas-qty').value = d.qty || 1;
@@ -531,11 +899,92 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('meas-dimensions-confirmed').checked = d.dimensionsConfirmed === '1';
             document.getElementById('meas-flyscreen').checked = d.flyscreen === '1';
 
+            wizBrandSel.value = d.brand || '';
+            wizSelectedSystem = d.system ? {id: d.system, name: d.systemName || ''} : null;
+            wizSelectedTopology = d.topology ? {id: d.topology, name: d.topologyName || '', panel_layout: [], shape: 'rectangle', n_panels: parseInt(d.nPanels) || 1} : null;
+            wizConfigSummary.textContent = (d.systemName || 'System') + (d.topologyName ? (' — ' + d.topologyName) : ' — Custom');
+
+            // Populate the "change config" step in the background so it's ready if used,
+            // without forcing the user through it again.
+            loadSystems(d.brand || '', d.system, d.topology || '');
+
+            renderWizPreview();
+            setWizStep(3);
+
             const modalEl = document.getElementById('addMeasModal');
             const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
             modal.show();
         });
     });
+
+    // ============================================================
+    // Bar Optimization Preview (single item)
+    // ============================================================
+    function showOptPreview(pk) {
+        const modalEl = document.getElementById('optPreviewModal');
+        const body = document.getElementById('optPreviewBody');
+        body.innerHTML = `<div class="text-center text-muted py-4">
+            <i class="fa fa-spinner fa-spin fa-2x mb-2"></i><p class="mb-0">Running bar optimization…</p></div>`;
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+
+        fetch("{% url 'measurement_optimize_preview' 0 %}".replace('/0/', '/' + pk + '/'))
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) {
+                    body.innerHTML = `<div class="alert alert-warning mb-0">${data.error || 'Could not compute an optimization preview for this item yet — check that its system has profile formulas configured.'}</div>`;
+                    return;
+                }
+                if (!data.has_cuts) {
+                    body.innerHTML = `<div class="alert alert-secondary mb-0">No cuttable profiles were produced for <strong>${data.reference}</strong> (${data.line_no}).</div>`;
+                    return;
+                }
+                let rows = data.bars.map(b => `
+                    <tr>
+                        <td>${b.profile_stock_no}<div class="text-muted small">${b.profile_name}</div></td>
+                        <td class="text-center">${b.bar_count}</td>
+                        <td class="text-center">${b.avg_utilisation_pct}%</td>
+                    </tr>`).join('');
+                let diagHtml = '';
+                if (data.diagnostics && data.diagnostics.length) {
+                    diagHtml = `<div class="small text-muted mt-2"><i class="fa fa-info-circle me-1"></i>${data.diagnostics.join('<br>')}</div>`;
+                }
+                body.innerHTML = `
+                    <p class="mb-2"><strong>${data.reference}</strong> <span class="badge bg-secondary">${data.line_no}</span></p>
+                    <div class="row text-center mb-3">
+                        <div class="col-4"><div class="fs-4 fw-bold text-primary">${data.totals.total_bars}</div><div class="small text-muted">Bars needed</div></div>
+                        <div class="col-4"><div class="fs-4 fw-bold text-success">${data.totals.overall_utilisation_pct}%</div><div class="small text-muted">Avg. utilisation</div></div>
+                        <div class="col-4"><div class="fs-4 fw-bold">${data.totals.cut_pieces}</div><div class="small text-muted">Cut pieces</div></div>
+                    </div>
+                    <table class="table table-sm">
+                        <thead><tr><th>Profile</th><th class="text-center">Bars</th><th class="text-center">Avg. Util.</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                    ${diagHtml}`;
+            })
+            .catch(() => {
+                body.innerHTML = `<div class="alert alert-danger mb-0">Something went wrong while running the optimization preview.</div>`;
+            });
+    }
+
+    document.querySelectorAll('.run-opt-preview-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { showOptPreview(btn.dataset.pk); });
+    });
+
+    // Auto-run the optimization preview right after a new item is created,
+    // matching the "select topology -> add info -> run bar optimization" flow.
+    const urlParams = new URLSearchParams(window.location.search);
+    const previewPk = urlParams.get('preview');
+    if (previewPk) {
+        showOptPreview(previewPk);
+        // Clean the URL so refreshing the page doesn't re-open the preview.
+        urlParams.delete('preview');
+        const newUrl = window.location.pathname + (urlParams.toString() ? ('?' + urlParams.toString()) : '');
+        window.history.replaceState({}, '', newUrl);
+    }
+
+    // Initialize the wizard for the "Add" case on first load.
+    loadSystems('');
 });
 </script>
 {% endblock %}
