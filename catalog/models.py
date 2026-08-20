@@ -77,6 +77,7 @@ class TopologyPanelType(models.TextChoices):
     OPENABLE_R = 'openable_r', 'Openable (Hinge Right)'
     TOP_HUNG = 'top_hung', 'Top Hung'
     LOUVER = 'louver', 'Louver'
+    MESH = 'mesh', 'Mosquito Mesh'
 
 
 class TopologyShape(models.TextChoices):

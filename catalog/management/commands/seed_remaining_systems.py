@@ -42,9 +42,12 @@ class Command(BaseCommand):
             ProfileFormula, Hardware, HardwareCategory, SystemHardwareRule,
         )
 
+        # SY04-SY08 are bucketed under the 'Generic' Series, not 'CutFlow
+        # Standard' (which is now reserved for the 2/3 Track sliding
+        # systems only -- see catalog/migrations/0011_reorganize_series.py).
         brand, _ = Brand.objects.get_or_create(
-            name='CutFlow Standard',
-            defaults={'description': 'Default system brand', 'is_active': True}
+            name='Generic',
+            defaults={'description': 'Catch-all for every other system not part of a named series.', 'is_active': True}
         )
 
         # ------------------------------------------------------------------

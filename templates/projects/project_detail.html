@@ -684,6 +684,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         const ly = gy + gh * k / slats;
                         s += `<line x1="${gx}" y1="${ly}" x2="${gx + gw}" y2="${ly}" stroke="${colorHex}" stroke-width="1.5" opacity="0.85"/>`;
                     }
+                } else if (type === 'mesh') {
+                    // Mosquito mesh: fine cross-hatch pattern over the pane.
+                    const meshId = 'mesh-' + uid + '-' + i;
+                    s += `<pattern id="${meshId}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="5" stroke="#6c757d" stroke-width="1"/>
+                    </pattern>`;
+                    s += `<rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="url(#${meshId})" opacity="0.65"/>`;
                 }
             });
         }

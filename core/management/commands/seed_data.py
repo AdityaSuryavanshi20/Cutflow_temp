@@ -23,8 +23,15 @@ class Command(BaseCommand):
         )
 
         self.stdout.write('Seeding brands...')
+        # NOTE: Only 3 Series are surfaced in the Add-Item wizard for now:
+        # 'CutFlow Standard' (2/3 Track sliding only), 'Generic' (everything
+        # else), and 'Jindal-Domal' (seeded separately, see migration
+        # catalog/0011_reorganize_series.py). We intentionally no longer
+        # create the old empty placeholder brands (Rehau/VEKA/Schuco/
+        # Aluplast/Fenesta) here since they had zero systems attached and
+        # just cluttered the Series dropdown.
         brands = {}
-        for name in ['Generic', 'Rehau', 'VEKA', 'Schuco', 'Aluplast', 'Fenesta']:
+        for name in ['Generic', 'CutFlow Standard']:
             b, _ = Brand.objects.get_or_create(name=name)
             brands[name] = b
 
@@ -50,10 +57,15 @@ class Command(BaseCommand):
             ('AL01', 'Aluminum Casement System', SystemCategory.CASEMENT),
             ('UP01', 'uPVC Casement System', SystemCategory.CASEMENT),
         ]
+        # Only the 2 & 3 Track sliding systems belong under 'CutFlow Standard';
+        # every other system (casement, fixed, tilt&turn, doors, louvre, ...)
+        # is bucketed under 'Generic'.
+        cutflow_standard_codes = {'SY02', 'SY03'}
         systems = {}
         for code, name, cat in systems_data:
+            target_brand = brands['CutFlow Standard'] if code in cutflow_standard_codes else brands['Generic']
             s, _ = System.objects.get_or_create(
-                code=code, defaults={'name': name, 'category': cat, 'brand': brands['Generic']})
+                code=code, defaults={'name': name, 'category': cat, 'brand': target_brand})
             systems[code] = s
 
         self.stdout.write('Seeding profiles...')

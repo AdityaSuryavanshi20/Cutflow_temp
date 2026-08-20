@@ -13,18 +13,25 @@ class Command(BaseCommand):
             Hardware, HardwareCategory, SystemHardwareRule,
         )
 
-        brand, _ = Brand.objects.get_or_create(
+        # 'CutFlow Standard' is reserved for the 2/3 Track sliding systems
+        # only; SY01 (hinge casement) belongs under 'Generic' -- see
+        # catalog/migrations/0011_reorganize_series.py.
+        cutflow_brand, _ = Brand.objects.get_or_create(
             name='CutFlow Standard',
-            defaults={'description': 'Default system brand', 'is_active': True}
+            defaults={'description': 'CutFlow in-house standard series (2 & 3 Track sliding only).', 'is_active': True}
+        )
+        generic_brand, _ = Brand.objects.get_or_create(
+            name='Generic',
+            defaults={'description': 'Catch-all for every other system not part of a named series.', 'is_active': True}
         )
 
         systems_data = [
-            ('SY01', 'Hinge Int Glz System', SystemCategory.CASEMENT),
-            ('SY02', 'Sliding 2-Track System', SystemCategory.SLIDING),
-            ('SY03', 'Sliding 3-Track System', SystemCategory.SLIDING),
+            ('SY01', 'Hinge Int Glz System', SystemCategory.CASEMENT, generic_brand),
+            ('SY02', 'Sliding 2-Track System', SystemCategory.SLIDING, cutflow_brand),
+            ('SY03', 'Sliding 3-Track System', SystemCategory.SLIDING, cutflow_brand),
         ]
         systems = {}
-        for code, name, category in systems_data:
+        for code, name, category, brand in systems_data:
             system, created = System.objects.get_or_create(
                 code=code,
                 defaults={'name': name, 'category': category, 'material': SystemMaterial.ALUMINIUM,
@@ -54,7 +61,7 @@ class Command(BaseCommand):
                 defaults={
                     'name': name,
                     'category': category,
-                    'brand': brand,
+                    'brand': generic_brand,
                     'standard_bar_length': bar_len,
                     'weight_per_meter': wt,
                     'cost_per_meter': cost,
@@ -188,7 +195,7 @@ class Command(BaseCommand):
                     'unit': unit,
                     'unit_cost': cost,
                     'weight_per_unit': wt,
-                    'brand': brand,
+                    'brand': generic_brand,
                     'is_active': True,
                 }
             )
